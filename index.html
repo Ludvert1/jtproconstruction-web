@@ -508,6 +508,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
 
   function showPage(id){
@@ -542,23 +543,146 @@
 
   /* BOOKING FORM */
   const modal=document.getElementById('modal');
-  document.getElementById('bookBtn').addEventListener('click',()=>{
+
+  /* ════════════════════════════════════════════════════════════════════
+     BOOKINGS DELIVERED TO info@jtproconstruction.com (via Web3Forms — free)
+     SETUP (one time):
+       1. Go to  https://web3forms.com  →  click "Create Access Key"
+       2. Enter  info@jtproconstruction.com  and submit
+       3. Check that inbox for the Access Key email, copy the key
+       4. Paste it below, replacing YOUR_ACCESS_KEY_HERE  (keep the quotes)
+     After that, every booking arrives straight in your email inbox.
+     (This key is safe to leave in the page — it's just an alias to your email.)
+     ════════════════════════════════════════════════════════════════════ */
+  const W3F_ACCESS_KEY      = "42bfe850-d971-472d-b688-05e5a8ad772f";   // set, sends to your inbox
+
+  /* ════════════════════════════════════════════════════════════════════
+     UPGRADES  —  Client Auto-Reply  +  Text Alert   (powered by EmailJS, free)
+     One-time setup (free account at https://www.emailjs.com):
+       • Add an Email Service (connect your Gmail)              -> Service ID
+       • Create ONE Email Template with exactly these fields:
+             To Email : {{to_email}}
+             Subject  : {{subject}}
+             Content  : {{message}}                            -> Template ID
+       • Account -> General -> copy your Public Key             -> Public Key
+     Paste the three values below, then re-deploy. Until then, bookings still
+     reach your inbox via Web3Forms and the two extras simply stay off.
+     ════════════════════════════════════════════════════════════════════ */
+  const EMAILJS_PUBLIC_KEY  = "9UPzNi48mnrmEuULL";         // set
+  const EMAILJS_SERVICE_ID  = "service_gp2a35k";           // set
+  const EMAILJS_TEMPLATE_ID = "template_rzs7s06";          // set (verify exact casing in dashboard)
+
+  /* TEXT ALERT destination = your number @ your carrier's email-to-text gateway.
+     Change this to match YOUR mobile carrier:
+       Verizon  : 8329716540@vtext.com
+       AT&T     : 8329716540@txt.att.net
+       T-Mobile : 8329716540@tmomail.net
+       Cricket  : 8329716540@mms.cricketwireless.net
+       Metro    : 8329716540@mymetropcs.com                                      */
+  const OWNER_TEXT_GATEWAY  = "8329716540@tmomail.net";     // T-Mobile (set)
+
+  const EMAILJS_READY = (typeof emailjs!=='undefined' && EMAILJS_PUBLIC_KEY!=='YOUR_EMAILJS_PUBLIC_KEY');
+  if(EMAILJS_READY){ try{ emailjs.init({publicKey:EMAILJS_PUBLIC_KEY}); }catch(e){} }
+
+  /* Friendly confirmation emailed to the client */
+  function clientAutoReply(p){
+    return 'Hi '+p.Name+',\n\n'+
+      'Thank you for booking with JTProconstruction LLC! We have received your request and will reach out shortly to confirm your appointment.\n\n'+
+      '--- TO CONFIRM YOUR APPOINTMENT ---\n'+
+      'A $25 booking fee is required to lock in your slot (it is credited toward your project).\n'+
+      'Please send $25 via Zelle or Venmo to: 832-971-6540\n'+
+      'Add your name in the payment note so we can match it to your booking.\n\n'+
+      'YOUR REQUEST\n'+
+      'Service: '+p.Service+'\n'+
+      (p.Preferred_Date?('Preferred date: '+p.Preferred_Date+'\n'):'')+
+      (p.Preferred_Time?('Preferred time: '+p.Preferred_Time+'\n'):'')+
+      (p.Address?('Address: '+p.Address+'\n'):'')+
+      '\nQuestions? Call or text us anytime at 832-971-6540.\n\n'+
+      'JTProconstruction LLC\nNew Caney, TX - Greater Houston Area';
+  }
+  /* Short message texted to the owner's phone */
+  function ownerTextAlert(p){
+    return 'NEW BOOKING - '+p.Name+' / '+p.Phone+' / '+p.Service+
+      (p.Preferred_Date?(' / '+p.Preferred_Date):'')+
+      (p.Preferred_Time?(' '+p.Preferred_Time):'')+
+      ' / $25 fee pending';
+  }
+  /* Fire both extras — best-effort, never blocks the booking itself */
+  function sendBookingExtras(p){
+    if(!EMAILJS_READY) return;
+    if(p.Email && /.+@.+\..+/.test(p.Email)){
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email:p.Email, to_name:p.Name,
+        subject:'We received your booking — JTProconstruction LLC',
+        message:clientAutoReply(p)
+      }).catch(function(e){console.log('Auto-reply failed:',e);});
+    }
+    if(OWNER_TEXT_GATEWAY && OWNER_TEXT_GATEWAY.indexOf('@')>0){
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email:OWNER_TEXT_GATEWAY, to_name:'JTPro',
+        subject:'New Booking',
+        message:ownerTextAlert(p)
+      }).catch(function(e){console.log('Text alert failed:',e);});
+    }
+  }
+
+  document.getElementById('bookBtn').addEventListener('click',async ()=>{
+    const btn=document.getElementById('bookBtn');
     const name=document.getElementById('bName').value.trim();
     const phone=document.getElementById('bPhone').value.trim();
     const svc=document.getElementById('bSvc').value;
     const ack=document.getElementById('bAck').checked;
     if(!name||!phone||!svc){alert('Please add your name, phone, and the service you need.');return;}
     if(!ack){alert('Please acknowledge the $25 booking fee to confirm your appointment.');return;}
-    // Build an email handoff with the details
-    const body=encodeURIComponent(
-      'New booking request from the website:\n\n'+
-      'Name: '+name+'\nPhone: '+phone+'\nEmail: '+document.getElementById('bEmail').value+
-      '\nAddress: '+document.getElementById('bAddr').value+'\nService: '+svc+
-      '\nPreferred Date: '+document.getElementById('bDate').value+'\nPreferred Time: '+document.getElementById('bTime').value+
-      '\nDetails: '+document.getElementById('bNotes').value+
-      '\n\n$25 booking fee to be paid via Zelle/Venmo to 832-971-6540.');
-    window.location.href='mailto:info@jtproconstruction.com?subject='+encodeURIComponent('Booking Request — '+name)+'&body='+body;
-    modal.classList.add('open');
+
+    const payload={
+      access_key:W3F_ACCESS_KEY,
+      subject:'New Booking Request — '+name,
+      from_name:'JTProconstruction Website',
+      Name:name, Phone:phone,
+      Email:document.getElementById('bEmail').value,
+      Address:document.getElementById('bAddr').value,
+      Service:svc,
+      Preferred_Date:document.getElementById('bDate').value,
+      Preferred_Time:document.getElementById('bTime').value,
+      Details:document.getElementById('bNotes').value,
+      Booking_Fee:'$25 due via Zelle/Venmo to 832-971-6540 (client acknowledged)'
+    };
+
+    const mailFallback=()=>{
+      const body=encodeURIComponent('New booking request:\n\nName: '+name+'\nPhone: '+phone+
+        '\nEmail: '+payload.Email+'\nAddress: '+payload.Address+'\nService: '+svc+
+        '\nPreferred Date: '+payload.Preferred_Date+'\nPreferred Time: '+payload.Preferred_Time+
+        '\nDetails: '+payload.Details+'\n\n$25 booking fee via Zelle/Venmo to 832-971-6540.');
+      window.location.href='mailto:info@jtproconstruction.com?subject='+encodeURIComponent('Booking Request — '+name)+'&body='+body;
+    };
+
+    // If the key hasn't been set yet, fall back to opening the email app
+    if(W3F_ACCESS_KEY==='YOUR_ACCESS_KEY_HERE'){ mailFallback(); modal.classList.add('open'); return; }
+
+    btn.disabled=true; const label=btn.innerHTML; btn.innerHTML='Sending…';
+    try{
+      const res=await fetch('https://api.web3forms.com/submit',{
+        method:'POST',
+        headers:{'Content-Type':'application/json',Accept:'application/json'},
+        body:JSON.stringify(payload)
+      });
+      const data=await res.json();
+      if(data.success){
+        sendBookingExtras(payload);
+        modal.classList.add('open');
+        ['bName','bPhone','bEmail','bAddr','bSvc','bDate','bTime','bNotes'].forEach(id=>{var el=document.getElementById(id);if(el)el.value='';});
+        document.getElementById('bAck').checked=false;
+      }else{
+        alert('That did not go through. Opening your email app as a backup…');
+        mailFallback();
+      }
+    }catch(err){
+      alert('Network issue — opening your email app as a backup…');
+      mailFallback();
+    }finally{
+      btn.disabled=false; btn.innerHTML=label;
+    }
   });
   document.getElementById('modalClose').addEventListener('click',()=>modal.classList.remove('open'));
   modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open');});
